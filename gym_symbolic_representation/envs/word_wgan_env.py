@@ -48,6 +48,7 @@ class WordWganEnv(Env):
         self.observation_space = spaces.Box(-bounds, bounds, (self.x_k + self.z_k + 3,))
         self.d = wgan_sequential_discriminator(self.x_k, self.max_len)
         self.iteration = 0
+        self.fake_average = 0
         self.real_average = 0
 
     def _reset(self):
@@ -87,8 +88,13 @@ class WordWganEnv(Env):
             np.random.shuffle(data)
             x = data[:, :-1]
             y = data[:, -1:]
-            self.d.fit([x], [y], nb_epoch=nb_epoch, verbose=1)
-            self.real_average = np.mean(self.d.predict(np.vstack(self.samples)))
+            history = self.d.fit([x], [y], nb_epoch=nb_epoch, verbose=1)
+            logging.info("Trained D {} epochs: {}".format(nb_epoch, history.history))
+        if n > 1:
+            self.fake_average = np.mean(self.d.predict(np.vstack(self.outputs)), axis=None)
+            self.real_average = np.mean(self.d.predict(np.vstack(self.samples)), axis=None)
+
+            logging.info("Calculated average fake: {}, average real: {}".format(self.fake_average, self.real_average))
 
     def to_vector(self, seq):
         assert (len(seq) <= self.max_len)
@@ -110,6 +116,7 @@ class WordWganEnv(Env):
             self.pointer = min(self.pointer + 1, len(self.sequence) - 1)
         elif action == 2:
             done = True
+            reward += 20.0
         else:
             char = action - 3
             assert (char >= 0)
@@ -122,7 +129,7 @@ class WordWganEnv(Env):
             done = True
         if done:
             if len(self.output) == 0:
-                reward = -1000
+                reward -= 1000.0
             else:
                 ar = self.to_vector(self.output)
                 self.outputs.append(ar)
@@ -134,10 +141,14 @@ class WordWganEnv(Env):
                     self.samples.pop(0)
                 self.train_d()
                 yfake = self.d.predict(ar.reshape((1, -1)))[0, 0]
-                reward = 5.0+yfake-self.real_average
 
+                #reward += (2*yfake) - self.real_average + self.fake_average
+                reward += yfake - self.real_average
                 logging.info(
-                    "Iteration: {}, Reward: {}, Output: {}".format(self.iteration, float(reward), output_str))
+                    "Iteration: {}, Yfake(average): {}, Yreal(average): {}, Yfake: {}, Reward: {}, Output: {}".format(
+                        self.iteration, self.fake_average,
+                        self.real_average, yfake,
+                        float(reward), output_str))
         observation = self._observation()
         info = {}
         return observation, reward, done, info

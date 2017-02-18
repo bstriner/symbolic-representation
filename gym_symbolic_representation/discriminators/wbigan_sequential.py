@@ -10,7 +10,7 @@ import numpy as np
 
 def wbigan_sequential_discriminator(z_k, z_len, x_k, x_len):
     def constraint():
-        return ClipConstraint(1e-2)
+        return ClipConstraint(1e-1)
 
     x = Input((x_len,), dtype=np.float32)
     z = Input((z_len,), dtype=np.float32)
