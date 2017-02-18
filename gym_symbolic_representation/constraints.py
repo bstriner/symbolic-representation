@@ -9,8 +9,8 @@ class ClipConstraint(Constraint):
             self.min_value = np.float32(min_value)
             self.max_value = np.float32(max_value)
         else:
-            self.max_value = np.float32(-min_value)
-            self.min_value = np.float32(min_value)
+            self.min_value = np.float32(-min_value)
+            self.max_value = np.float32(min_value)
 
     def __call__(self, p):
         return K.clip(p, self.min_value, self.max_value)

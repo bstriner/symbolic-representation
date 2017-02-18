@@ -10,7 +10,7 @@ import numpy as np
 
 def wgan_sequential_discriminator(x_k, x_len):
     def constraint():
-        return ClipConstraint(1e-2)
+        return ClipConstraint(1e-1)
 
     x = Input((x_len,), dtype='int32')
     nch = 256

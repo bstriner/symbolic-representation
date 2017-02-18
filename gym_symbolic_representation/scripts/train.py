@@ -4,7 +4,6 @@ import gym
 from gym import wrappers
 import pandas as pd
 import sys
-import gym_learning_to_learn
 import pandas as pd
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Flatten, Dropout
@@ -61,6 +60,11 @@ def main(argv, default_path, env_name, create_agent):
         dqn.save_weights(h5path, overwrite=True)
 
     if args.train:
+        #Generate samples
+        dqn.test(env, nb_episodes=env.d_warmup, visualize=visualize)
+        #Pretrain discriminator
+        env.train_d(nb_epoch=25, force=True)
+        #Train agent
         history = dqn.fit(env, nb_steps=args.steps, visualize=visualize, verbose=2)
         pd.DataFrame(history.history).to_csv(csvpath)
         dqn.save_weights(h5path, overwrite=True)
