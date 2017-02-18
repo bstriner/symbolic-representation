@@ -6,6 +6,7 @@ from ..datasets import combined
 from ..datasets.processing import load_or_create
 from ..priors.sequence import sequence
 from ..discriminators.wgan_sequential import wgan_sequential_discriminator
+from keras.utils.np_utils import to_categorical
 
 
 class WordWganEnv(Env):
@@ -27,23 +28,43 @@ class WordWganEnv(Env):
         self.charset = data["charset"]
         self.charmap = data["charmap"]
         self.wordcount = len(self.words)
-        self.max_steps = 100
+        self.max_steps = 150
         self.max_len = 50
         self.pointer = 0
         self.sequence = sequence()
         self.output = []
         self.action_space = spaces.Discrete(3 + len(self.charset))
         bounds = float('inf')
-        self.observation_space = spaces.Box(-bounds, bounds, (4,))
         self.viewer = None
         self.outputs = []
         self.samples = []
         self.memory_limit = 5000
-        self.d = wgan_sequential_discriminator(len(self.charset), self.max_len)
         self.d_warmup = 100
+        self.current_step = 0
+        self.last_write = 0
+        self.x_k = len(self.charset)
+        self.z_k = 60
+        self.observation_space = spaces.Box(-bounds, bounds, (self.x_k+self.z_k+3,))
+        self.d = wgan_sequential_discriminator(self.x_k, self.max_len)
+
+    def _reset(self):
+        self.sequence = sequence()
+        self.current_step = 0
+        self.last_write = 0
+        self.pointer = 0
+        self.output = []
+        observation = self._observation()
+        return observation
 
     def _observation(self):
-        pass
+        current_symbol = self.sequence[self.pointer]
+        obs = np.concatenate((
+            to_categorical(current_symbol, self.z_k).reshape((-1)),
+            to_categorical(self.last_write, self.x_k + 1).reshape((-1)),
+            [self.current_step, self.pointer]), axis=0)
+        #print("Obs shape: {}".format(obs.shape))
+        #print("Obs space shape: {}".format(self.observation_space.shape))
+        return obs
 
     def word_vector(self):
         i = np.random.randint(0, self.wordcount)
@@ -52,7 +73,7 @@ class WordWganEnv(Env):
         return self.to_vector(seq)
 
     def _train_d(self):
-        n = len(self.output)
+        n = len(self.outputs)
         if n >= self.d_warmup:
             xfake = np.vstack(self.outputs)
             xreal = np.vstack(self.samples)
@@ -60,17 +81,22 @@ class WordWganEnv(Env):
             y = np.vstack((np.ones((n, 1)) * -1, np.ones((n, 1))))
             data = np.hstack((x, y))
             np.random.shuffle(data)
-            x = data[:,:-1]
-            y = data[:,-1:]
+            x = data[:, :-1]
+            y = data[:, -1:]
             self.d.fit([x], [y], nb_epoch=5, verbose=1)
 
     def to_vector(self, seq):
+        assert(len(seq) <= self.max_len)
         seq = [s + 1 for s in seq]
         while (len(seq) < self.max_len):
             seq = [0] + seq
         return np.array(seq)
 
+    def to_string(self, seq):
+        return "".join(self.charset[s] for s in seq)
+
     def _step(self, action):
+        self.current_step += 1
         done = False
         reward = 0.0
         if action == 0:
@@ -84,19 +110,26 @@ class WordWganEnv(Env):
             assert (char >= 0)
             assert (char < len(self.charset))
             self.output.append(char)
-        if len(self.output) > self.max_len:
+            self.last_write = char+1
+        if len(self.output) >= self.max_len:
+            done = True
+        if self.current_step >= self.max_steps - 1:
             done = True
         if done:
-            ar = self.to_vector(self.output)
-            self.outputs.append(ar)
-            self.samples.append(self.word_vector())
-            self.output = []
-            if len(self.outputs) > self.memory_limit:
-                self.outputs.pop(0)
-            if len(self.samples) > self.memory_limit:
-                self.samples.pop(0)
-            self._train_d()
-            reward = self.d.predict(ar.reshape((1, -1)))[0]
+            if len(self.output) == 0:
+                reward = -100
+            else:
+                ar = self.to_vector(self.output)
+                self.outputs.append(ar)
+                output_str = self.to_string(self.output)
+                print("Output string: {}".format(output_str))
+                self.samples.append(self.word_vector())
+                if len(self.outputs) > self.memory_limit:
+                    self.outputs.pop(0)
+                if len(self.samples) > self.memory_limit:
+                    self.samples.pop(0)
+                self._train_d()
+                reward = self.d.predict(ar.reshape((1, -1)))[0]
         observation = self._observation()
         info = {}
         return observation, reward, done, info

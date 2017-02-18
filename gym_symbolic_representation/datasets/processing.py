@@ -1,5 +1,6 @@
 import pickle
 import os
+from ..utils import clean_text
 
 
 def word_counts(ws):
@@ -24,6 +25,7 @@ def character_counts(ws):
 
 
 def process(ws):
+    ws = [clean_text(w) for w in ws]
     wc = word_counts(ws)
     cc = character_counts(ws)
 
@@ -35,7 +37,7 @@ def process(ws):
 
     charset = list(cc.keys())
     charset.sort()
-    charmap = {k:i for i,k in enumerate(charset)}
+    charmap = {k: i for i, k in enumerate(charset)}
 
     print("Charset: {}".format(charset))
 
