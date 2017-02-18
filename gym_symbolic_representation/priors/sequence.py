@@ -2,6 +2,8 @@ import numpy as np
 
 
 def exponential_sampling(n, k, rate=0.98):
+    n = int(n)
+    k = int(k)
     x = np.arange(k)
     t = np.power(rate, x)
     p = t / np.sum(t)
