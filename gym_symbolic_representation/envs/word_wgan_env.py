@@ -48,6 +48,7 @@ class WordWganEnv(Env):
         self.observation_space = spaces.Box(-bounds, bounds, (self.x_k + self.z_k + 3,))
         self.d = wgan_sequential_discriminator(self.x_k, self.max_len)
         self.iteration = 0
+        self.real_average = 0
 
     def _reset(self):
         self.iteration += 1
@@ -87,6 +88,7 @@ class WordWganEnv(Env):
             x = data[:, :-1]
             y = data[:, -1:]
             self.d.fit([x], [y], nb_epoch=nb_epoch, verbose=1)
+            self.real_average = np.mean(self.d.predict(np.vstack(self.samples)))
 
     def to_vector(self, seq):
         assert (len(seq) <= self.max_len)
@@ -120,7 +122,7 @@ class WordWganEnv(Env):
             done = True
         if done:
             if len(self.output) == 0:
-                reward = -100
+                reward = -1000
             else:
                 ar = self.to_vector(self.output)
                 self.outputs.append(ar)
@@ -131,7 +133,9 @@ class WordWganEnv(Env):
                 if len(self.samples) > self.memory_limit:
                     self.samples.pop(0)
                 self.train_d()
-                reward = -self.d.predict(ar.reshape((1, -1)))[0, 0]
+                yfake = self.d.predict(ar.reshape((1, -1)))[0, 0]
+                reward = 5.0+yfake-self.real_average
+
                 logging.info(
                     "Iteration: {}, Reward: {}, Output: {}".format(self.iteration, float(reward), output_str))
         observation = self._observation()
