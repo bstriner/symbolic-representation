@@ -131,7 +131,7 @@ class WordWganEnv(Env):
                 if len(self.samples) > self.memory_limit:
                     self.samples.pop(0)
                 self.train_d()
-                reward = self.d.predict(ar.reshape((1, -1)))[0, 0]
+                reward = -self.d.predict(ar.reshape((1, -1)))[0, 0]
                 logging.info(
                     "Iteration: {}, Reward: {}, Output: {}".format(self.iteration, float(reward), output_str))
         observation = self._observation()
