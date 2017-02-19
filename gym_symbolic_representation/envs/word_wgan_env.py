@@ -21,16 +21,14 @@ class WordWganEnv(Env):
 
     """
 
-    def __init__(self):
-        path = "output/words.pkl"
-        data = load_or_create(path, combined.words)
+    def __init__(self, data, max_len=50, max_steps=150):
         self.words = data["words"]
         self.characters = data["characters"]
         self.charset = data["charset"]
         self.charmap = data["charmap"]
         self.wordcount = len(self.words)
-        self.max_steps = 150
-        self.max_len = 50
+        self.max_steps = max_steps
+        self.max_len = max_len
         self.pointer = 0
         self.sequence = sequence()
         self.output = []
@@ -116,7 +114,7 @@ class WordWganEnv(Env):
             self.pointer = min(self.pointer + 1, len(self.sequence) - 1)
         elif action == 2:
             done = True
-            reward += 20.0
+            #reward += 5.0
         else:
             char = action - 3
             assert (char >= 0)
@@ -125,11 +123,13 @@ class WordWganEnv(Env):
             self.last_write = char + 1
         if len(self.output) >= self.max_len:
             done = True
+            reward -= 100.0
         if self.current_step >= self.max_steps - 1:
             done = True
+            reward -= 100.0
         if done:
             if len(self.output) == 0:
-                reward -= 1000.0
+                reward -= 100.0
             else:
                 ar = self.to_vector(self.output)
                 self.outputs.append(ar)

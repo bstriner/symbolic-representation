@@ -26,17 +26,19 @@ import os
 
 def create_model(env, args):
     nb_actions = env.action_space.n
-    reg = lambda: l1l2(1e-7, 1e-7)
+    #reg = lambda: l1l2(1e-7, 1e-7)
+    reg = lambda : None
+    nch = 512
     dropout = 0.5
     model = Sequential()
     model.add(Flatten(input_shape=(args.window,) + env.observation_space.shape))
-    model.add(Dense(128, W_regularizer=reg()))
+    model.add(Dense(nch, W_regularizer=reg()))
     #model.add(Dropout(dropout))
     model.add(LeakyReLU(0.2))
-    model.add(Dense(64, W_regularizer=reg()))
+    model.add(Dense(nch, W_regularizer=reg()))
     #model.add(Dropout(dropout))
     model.add(LeakyReLU(0.2))
-    model.add(Dense(32, W_regularizer=reg()))
+    model.add(Dense(nch, W_regularizer=reg()))
     #model.add(Dropout(dropout))
     model.add(LeakyReLU(0.2))
     model.add(Dense(nb_actions, W_regularizer=reg()))

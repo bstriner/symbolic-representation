@@ -1,1 +1,3 @@
 from .word_wgan_env import WordWganEnv
+from .word_wgan_combined_env import WordWganCombinedEnv
+from .word_wgan_shakespeare_env import WordWganShakespeareEnv
