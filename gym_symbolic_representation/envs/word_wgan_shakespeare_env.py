@@ -14,6 +14,6 @@ class WordWganShakespeareEnv(WordWganEnv):
 
     def __init__(self):
         path = "output/words-shakespeare.pkl"
-        data = load_or_create(path, shakespeare.words)
+        data = load_or_create(path, shakespeare.words, lower=True)
         WordWganEnv.__init__(self, data=data, max_len=20, max_steps=50)
 

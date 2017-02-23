@@ -24,8 +24,8 @@ def character_counts(ws):
     return dict
 
 
-def process(ws):
-    ws = [clean_text(w) for w in ws]
+def process(ws, lower=False):
+    ws = [clean_text(w, lower) for w in ws]
     wc = word_counts(ws)
     cc = character_counts(ws)
 
@@ -57,10 +57,10 @@ def load(path):
         return pickle.load(f)
 
 
-def load_or_create(path, words):
+def load_or_create(path, words, lower=False):
     if os.path.exists(path):
         return load(path)
     else:
-        data = process(words())
+        data = process(words(), lower=lower)
         save(data, path)
         return data

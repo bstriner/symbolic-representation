@@ -2,7 +2,7 @@ from keras.layers.recurrent import LSTM
 from keras.layers import Input, Embedding, merge, Dense, Activation, LeakyReLU
 from keras.models import Model
 from ..objectives import maximize_sign
-from keras.optimizers import RMSprop
+from keras.optimizers import RMSprop, Adam
 from ..constraints import ClipConstraint
 from ..initializations import uniform_init
 import numpy as np
@@ -27,6 +27,6 @@ def wgan_sequential_discriminator(x_k, x_len):
     y = Dense(1, W_constraint=constraint(), init=init)(h)
 
     model = Model([x], [y])
-    opt = RMSprop(1e-4)
+    opt = Adam(1e-3)
     model.compile(opt, loss=maximize_sign)
     return model

@@ -51,5 +51,5 @@ def create_agent_dqn(env, args):
     policy = BoltzmannQPolicy()
     dqn = DQNAgent(model=model, nb_actions=env.action_space.n, memory=memory, nb_steps_warmup=args.memory,
                    target_model_update=1e-4, policy=policy)
-    dqn.compile(RMSprop(lr=1e-5), metrics=['mae'])
+    dqn.compile(Adam(lr=1e-4), metrics=['mae'])
     return dqn

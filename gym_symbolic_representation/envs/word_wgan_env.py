@@ -37,7 +37,7 @@ class WordWganEnv(Env):
         self.viewer = None
         self.outputs = []
         self.samples = []
-        self.memory_limit = 10000
+        self.memory_limit = 5000
         self.d_warmup = 100
         self.current_step = 0
         self.last_write = 0
