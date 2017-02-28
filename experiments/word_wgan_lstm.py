@@ -114,7 +114,7 @@ def reward_function(vt1, r, decay):
 
 
 class Generator(object):
-    def __init__(self, name, latent_dim, depth, k, hidden_dim, exploration_probability):
+    def __init__(self, name, latent_dim, depth, k, hidden_dim, exploration_probability, exploration_decay_rate):
         """
         z = input (n, latent_dim)
         o = hidden representation (n, depth, hidden_dim)
@@ -131,6 +131,7 @@ class Generator(object):
         # z = T.fmatrix("z")  # input latent samples (n, latent_dim)
         self.exploration_probability = theano.shared(np.float32(exploration_probability),
                                                      "{}_exploration_probability".format(name))
+        self.exploration_decay_rate = np.float32(exploration_decay_rate)
 
         # Hidden representation
         self.W_h = glorot_uniform((latent_dim, hidden_dim), "{}_W_h".format(name))  # z, (latent_dim, hidden_dim)
@@ -163,6 +164,11 @@ class Generator(object):
                        self.W_o, self.b_o,
                        self.W_j, self.b_j,
                        self.W_v, self.b_v]
+
+    def exploration_decay(self):
+        new_value = self.exploration_probability.get_value() * self.exploration_decay_rate
+        new_value = np.float32(new_value)
+        self.exploration_probability.set_value(new_value)
 
     def policy(self, z, e, ex):
         """
@@ -260,7 +266,7 @@ class Discriminator(object):
 
 class WGanModel(object):
     def __init__(self, latent_dim, hidden_dim, exploration_probability, clip_value, value_decay, data,
-                 batch_size):
+                 batch_size, exploration_decay_rate):
         self.latent_dim = latent_dim
         self.words = data["words"]
         self.depth = 1 + max(len(w) for w in self.words)
@@ -271,7 +277,8 @@ class WGanModel(object):
         self.charmap = data["charmap"]
         self.wordcount = len(self.words)
         self.charcount = len(self.charset)
-        self.generator = Generator("generator", latent_dim, depth, self.charcount, hidden_dim, exploration_probability)
+        self.generator = Generator("generator", latent_dim, depth, self.charcount, hidden_dim, exploration_probability,
+                                   exploration_decay_rate)
         self.discriminator = Discriminator("discriminator", depth, self.charcount, hidden_dim)
         self.clip_value = np.float32(clip_value)
         self.value_decay = theano.shared(np.float32(value_decay), "value_decay")
@@ -406,6 +413,7 @@ class WGanModel(object):
             dloss = np.mean(dloss, axis=None)
             gloss = np.mean(gloss, axis=None)
             print("Epoch: {}, D loss: {}, G loss: {}".format(epoch, dloss, gloss))
+            self.generator.exploration_decay()
 
 
 def main():
@@ -413,11 +421,13 @@ def main():
     data = load_or_create(path, shakespeare.words, lower=True)
     latent_dim = 100
     hidden_dim = 512
-    exploration_probability = 0.1
+    exploration_probability = 0.3
     clip_value = 1e-1
     value_decay = 0.98
     batch_size = 64
-    model = WGanModel(latent_dim, hidden_dim, exploration_probability, clip_value, value_decay, data, batch_size)
+    exploration_decay_rate = 0.998
+    model = WGanModel(latent_dim, hidden_dim, exploration_probability, clip_value, value_decay, data, batch_size,
+                      exploration_decay_rate)
     model.train(10000, 256, 16, "output/wgan-lstm/epoch-{:08d}.txt")
 
 
