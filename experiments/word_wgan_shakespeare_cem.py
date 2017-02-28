@@ -1,6 +1,6 @@
-#import os
+import os
 
-#os.environ["THEANO_FLAGS"] = "mode=FAST_COMPILE,device=cpu,floatX=float32"
+os.environ["THEANO_FLAGS"] = "mode=FAST_COMPILE,device=cpu,floatX=float32"
 import theano
 import theano.tensor as T
 from gym_symbolic_representation.datasets.processing import load_or_create
@@ -157,7 +157,8 @@ class WGanCEM(object):
         self.opt_d = Adam(1e-3)
         updates_d = self.opt_d.get_updates(self.discriminator.weights, self.discriminator.constraints, loss_d)
         self.batch_size = 64
-        self.batch_count = 256
+        self.batch_count = 128
+        self.generator_count = 32
         self.train_d_function = K.function([x_real, z] + params_g, [loss_d], updates=updates_d)
         self.predict_d_function = K.function([x_real], [y_real])
 
@@ -219,7 +220,7 @@ class WGanCEM(object):
         best_params = self.params_g_t
         best_loss = self.test_g(self.params_g_t)
         original_loss = best_loss
-        for _ in tqdm(range(20), desc="Training Generator"):
+        for _ in tqdm(range(self.generator_count), desc="Training Generator"):
             newparams = self.parameter_sampling()
             newloss = self.test_g(newparams)
             if newloss < best_loss:
@@ -229,10 +230,10 @@ class WGanCEM(object):
         print("G training: {} -> {}".format(original_loss, best_loss))
         return best_loss
 
-    def train(self, nb_epoch):
+    def train(self, nb_epoch, nb_epoch_d=5):
         for epoch in range(nb_epoch):
             d_loss = []
-            for _ in range(5):
+            for _ in range(nb_epoch_d):
                 d_loss.append(self.train_d())
             d_loss = np.average(d_loss, axis=None)
             g_loss = self.train_g()
