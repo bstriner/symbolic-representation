@@ -275,7 +275,8 @@ class WGanModel(object):
         self.value_decay = theano.shared(np.float32(value_decay), "value_decay")
 
         self.batch_size = batch_size
-        self.word_vectors = np.vstack([self.word_to_vector(word).reshape((1, -1)) for word in self.words])
+        self.word_vectors = np.vstack([self.word_to_vector(word).reshape((1, -1)) for word in self.words]).astype(
+            np.int32)
         xreal = Input((depth,), name="xreal", dtype="int32")
         z = Input((latent_dim,), name="z", dtype="float32")
         e = Input((depth,), name="e", dtype="float32")
@@ -292,7 +293,7 @@ class WGanModel(object):
         _, yreal = self.discriminator.discriminator(xreal)
         dloss = T.mean(yfake, axis=None) - T.mean(yreal, axis=None)
         dconstraints = {p: ClipConstraint(1e-1) for p in self.discriminator.clip_params}
-        dopt = Adam(1e-3)
+        dopt = Adam(1e-4)
         dupdates = dopt.get_updates(self.discriminator.params, dconstraints, dloss)
 
         n = z.shape[0]
@@ -304,7 +305,7 @@ class WGanModel(object):
         # print("vtarget: {}, {}, {}".format(vtarget, vtarget.ndim, vtarget.type))
         _, vpred = self.generator.value(z, xfake)
         gloss = T.mean(T.abs_(vtarget - vpred), axis=None)
-        gopt = Adam(1e-4)
+        gopt = Adam(1e-5)
         gupdates = gopt.get_updates(self.generator.params, {}, gloss)
         self.discriminator_train_function = theano.function([xreal, z, e, ex], [dloss], updates=dupdates)
         self.generator_train_function = theano.function([z, e, ex], [gloss], updates=gupdates)
@@ -316,7 +317,7 @@ class WGanModel(object):
         ar = [self.charmap[c] + 1 for c in word]
         while len(ar) < self.depth:
             ar.append(0)
-        vec = np.array(ar)
+        vec = np.array(ar).astype(np.int32)
         return vec
 
     def vector_to_word(self, vec):
@@ -341,7 +342,7 @@ class WGanModel(object):
 
     def real_sample(self, n):
         xind = np.random.randint(0, self.word_vectors.shape[0], (n,))
-        return self.word_vectors[xind, :]
+        return self.word_vectors[xind, :].astype(np.int32)
 
     def e_sample(self, n):
         return np.random.uniform(0, 1, (n, self.depth)).astype(np.float32)
@@ -360,7 +361,7 @@ class WGanModel(object):
         z = self.latent_sample(self.batch_size)
         e = self.e_sample(self.batch_size)
         ex = self.ex_sample(self.batch_size)
-        return self.discriminator_train_function(z, e, ex)[0]
+        return self.generator_train_function(z, e, ex)[0]
 
     def test(self):
         xreal = self.real_sample(self.batch_size)
@@ -385,15 +386,17 @@ class WGanModel(object):
                 f.write(w)
                 f.write("\n")
 
-    def train(self, nb_epoch, nb_epoch_discriminator, path):
-        for epoch in tqdm(range(nb_epoch)):
+    def train(self, nb_epoch, nb_batch, nb_batch_discriminator, path):
+        for epoch in tqdm(range(nb_epoch), desc="Training"):
             self.write_samples(path.format(epoch))
             dloss = []
-            for _ in tqdm(range(nb_epoch_discriminator)):
-                dloss.append(self.discriminator_train())
+            gloss = []
+            for _ in tqdm(range(nb_batch), desc="Epoch {}".format(epoch)):
+                for _ in range(nb_batch_discriminator):
+                    dloss.append(self.discriminator_train())
+                gloss.append(self.generator_train())
             dloss = np.mean(dloss, axis=None)
-            gloss = self.generator_train()
-
+            gloss = np.mean(gloss, axis=None)
             print("Epoch: {}, D loss: {}, G loss: {}".format(epoch, dloss, gloss))
 
 
@@ -405,9 +408,9 @@ def main():
     exploration_probability = 0.1
     clip_value = 1e-1
     value_decay = 0.98
-    batch_size = 128
+    batch_size = 64
     model = WGanModel(latent_dim, hidden_dim, exploration_probability, clip_value, value_decay, data, batch_size)
-    model.train(1000, 64, "output/wgan-lstm/epoch-{:08d}.txt")
+    model.train(1000, 256, 32, "output/wgan-lstm/epoch-{:08d}.txt")
 
 
 if __name__ == "__main__":
