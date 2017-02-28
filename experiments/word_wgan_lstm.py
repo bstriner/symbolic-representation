@@ -418,7 +418,7 @@ def main():
     value_decay = 0.98
     batch_size = 64
     model = WGanModel(latent_dim, hidden_dim, exploration_probability, clip_value, value_decay, data, batch_size)
-    model.train(10000, 256, 5, "output/wgan-lstm/epoch-{:08d}.txt")
+    model.train(10000, 256, 16, "output/wgan-lstm/epoch-{:08d}.txt")
 
 
 if __name__ == "__main__":
