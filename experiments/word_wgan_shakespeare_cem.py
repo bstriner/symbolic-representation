@@ -1,6 +1,5 @@
-import os
-
-os.environ["THEANO_FLAGS"] = "mode=FAST_COMPILE,device=cpu,floatX=float32"
+#import os
+#os.environ["THEANO_FLAGS"] = "mode=FAST_COMPILE,device=cpu,floatX=float32"
 import theano
 import theano.tensor as T
 from gym_symbolic_representation.datasets.processing import load_or_create
@@ -140,8 +139,8 @@ class WGanCEM(object):
         self.hidden_dim = hidden_dim
         self.n_steps = 20
         self.word_vectors = np.vstack([self.word_to_vector(word).reshape((1, -1)) for word in self.words])
-
         self.word_vectors = np.expand_dims(self.word_vectors, 2)
+        np.random.shuffle(self.word_vectors)
         x_k = self.charcount
         z, params_g, (x_fake, h), sample_params = decoder(latent_dim, hidden_dim, x_k, self.n_steps)
         self.params_g_t = sample_params()
@@ -157,13 +156,25 @@ class WGanCEM(object):
         self.opt_d = Adam(1e-3)
         updates_d = self.opt_d.get_updates(self.discriminator.weights, self.discriminator.constraints, loss_d)
         self.batch_size = 64
-        self.batch_count = 128
-        self.generator_count = 32
+        self.batch_count = 16
+        self.unroll_depth = 16
+        self.generator_count = 16
         self.train_d_function = K.function([x_real, z] + params_g, [loss_d], updates=updates_d)
         self.predict_d_function = K.function([x_real], [y_real])
 
         self.predict_g_function = K.function([z] + params_g, [x_fake])
         self.test_g_function = K.function([z] + params_g, [-y_fake])
+
+        self.backup_params = self.discriminator.weights+self.opt_d.weights
+        self.backup_values = None
+
+    def discriminator_backup(self):
+        self.backup_values = [p.get_value() for p in self.backup_params]
+
+
+    def discriminator_load(self):
+        for p, v in zip(self.backup_params, self.backup_values):
+            p.set_value(v)
 
     def word_to_vector(self, word):
         assert len(word) <= self.n_steps
@@ -191,28 +202,29 @@ class WGanCEM(object):
 
     def train_d(self):
         losses = []
-        np.random.shuffle(self.word_vectors)
-        batch_count = self.word_vectors.shape[0] / self.batch_size
-        batch_count = min(self.batch_count, batch_count)
-        for i in tqdm(range(batch_count), desc="Training Discriminator"):
-            x_real = self.word_vectors[i:i + self.batch_size, :,:]
-            # x_real = np.vstack(
-            #    [self.word_to_vector(self.sample_word()).reshape((1, -1)) for _ in range(self.batch_size)])
-            # x_real = np.expand_dims(x_real, 2)
-            # z = self.latent_sample(self.batch_size)
-            z = self.latent_sample(x_real.shape[0])
-            losses.append(self.train_d_function([x_real, z] + self.params_g_t)[0])
+        for _ in tqdm(range(self.batch_count), desc="Training Discriminator"):
+            losses.append(self.train_d_batch(self.params_g_t))
         return np.average(losses, axis=None)
 
+    def train_d_batch(self, generator_params):
+        x_ind = np.random.randint(0, self.word_vectors.shape[0], (self.batch_size,))
+        x_real = self.word_vectors[x_ind, :, :]
+        z = self.latent_sample(x_real.shape[0])
+        return self.train_d_function([x_real, z] + generator_params)[0]
+
     def test_g(self, params):
+        self.discriminator_backup()
+        for _ in range(self.unroll_depth):
+            self.train_d_batch(params)
         losses = []
-        for _ in tqdm(range(self.batch_count), desc="Testing Generator"):
+        for _ in range(self.batch_count):
             z = self.latent_sample(self.batch_size)
             losses.append(np.mean(self.test_g_function([z] + params), axis=None))
+        self.discriminator_load()
         return np.mean(losses, axis=None)
 
     def parameter_sampling(self):
-        eps = 1e-2
+        eps = 1e-1
         new_params = [param + np.random.normal(0, eps, param.shape) for param in self.params_g_t]
         return new_params
 
@@ -227,37 +239,42 @@ class WGanCEM(object):
                 best_params = newparams
                 best_loss = newloss
         self.params_g_t = best_params
-        print("G training: {} -> {}".format(original_loss, best_loss))
+        tqdm.write("G training: {} -> {}".format(original_loss, best_loss))
         return best_loss
 
-    def train(self, nb_epoch, nb_epoch_d=5):
-        for epoch in range(nb_epoch):
+    def train(self, nb_epoch, nb_batch, nb_batch_d, path):
+        for epoch in tqdm(range(nb_epoch), desc="Training"):
             d_loss = []
-            for _ in range(nb_epoch_d):
-                d_loss.append(self.train_d())
-            d_loss = np.average(d_loss, axis=None)
-            g_loss = self.train_g()
-            print("Epoch: {}, D loss: {}, G loss: {}".format(epoch, d_loss, g_loss))
-            if epoch % 10 == 0:
-                z = self.latent_sample(self.batch_size)
-                preds = self.predict_g_function([z] + self.params_g_t)[0]
-                path = "output/word-wgan-shakespeare/epoch-{:06d}.txt".format(epoch)
-                if not os.path.exists(os.path.dirname(path)):
-                    os.makedirs(os.path.dirname(path))
-                with open(path, 'w') as f:
-                    for i in range(self.batch_size):
-                        word = self.vector_to_word(preds[i, :])
-                        print("Generated: {}".format(word))
-                        f.write(word)
-                        f.write("\n")
+            g_loss = []
+            for _ in tqdm(range(nb_batch), desc="Epoch {}".format(epoch)):
+                for _ in range(nb_batch_d):
+                    d_loss.append(self.train_d())
+                g_loss.append(self.train_g())
+            d_loss = np.mean(d_loss, axis=None)
+            g_loss = np.mean(g_loss, axis=None)
+            tqdm.write("Epoch: {}, D loss: {}, G loss: {}".format(epoch, d_loss, g_loss))
+            self.write_samples(path.format(epoch))
+
+    def write_samples(self, path):
+        z = self.latent_sample(self.batch_size)
+        preds = self.predict_g_function([z] + self.params_g_t)[0]
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(os.path.dirname(path))
+        with open(path, 'w') as f:
+            for i in range(self.batch_size):
+                word = self.vector_to_word(preds[i, :])
+                print("Generated: {}".format(word))
+                f.write(word)
+                f.write("\n")
 
 
 def main():
     path = "output/words-shakespeare.pkl"
+    outputpath = "output/word-wgan-shakespeare-cem/epoch-{:06d}.txt"
     latent_dim = 100
     hidden_dim = 256
     model = WGanCEM(path, shakespeare.words, latent_dim, hidden_dim)
-    model.train(nb_epoch=1000)
+    model.train(nb_epoch=1000, nb_batch=64, nb_batch_d=5, path=outputpath)
 
 
 if __name__ == "__main__":
