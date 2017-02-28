@@ -284,7 +284,7 @@ class WGanModel(object):
         srng = RandomStreams(seed=234)
         z = srng.normal(size=(batch_n, latent_dim))
         e = srng.uniform(size=(batch_n, depth), low=0, high=1)
-        ex = srng.random_integers(size=(batch_n, latent_dim), low=0, high=self.wordcount)
+        ex = srng.random_integers(size=(batch_n, latent_dim), low=0, high=self.charcount)
         # z = Input((latent_dim,), name="z", dtype="float32")
         # e = Input((depth,), name="e", dtype="float32")
         # ex = Input((depth,), name="ex", dtype="int32")
@@ -418,7 +418,7 @@ def main():
     value_decay = 0.98
     batch_size = 64
     model = WGanModel(latent_dim, hidden_dim, exploration_probability, clip_value, value_decay, data, batch_size)
-    model.train(1000, 256, 5, "output/wgan-lstm/epoch-{:08d}.txt")
+    model.train(10000, 256, 5, "output/wgan-lstm/epoch-{:08d}.txt")
 
 
 if __name__ == "__main__":
