@@ -11,6 +11,8 @@ from gym_symbolic_representation.constraints import ClipConstraint
 from gym_symbolic_representation.datasets import shakespeare
 from gym_symbolic_representation.datasets.processing import load_or_create
 from tqdm import tqdm
+from theano.tensor.shared_randomstreams import RandomStreams
+from theano import function
 
 
 def discriminator_function(x, h, y,
@@ -278,9 +280,14 @@ class WGanModel(object):
         self.word_vectors = np.vstack([self.word_to_vector(word).reshape((1, -1)) for word in self.words]).astype(
             np.int32)
         xreal = Input((depth,), name="xreal", dtype="int32")
-        z = Input((latent_dim,), name="z", dtype="float32")
-        e = Input((depth,), name="e", dtype="float32")
-        ex = Input((depth,), name="ex", dtype="int32")
+        batch_n = T.iscalar("batch_n")
+        srng = RandomStreams(seed=234)
+        z = srng.normal(size=(batch_n, latent_dim))
+        e = srng.uniform(size=(batch_n, depth), low=0, high=1)
+        ex = srng.random_integers(size=(batch_n, latent_dim), low=0, high=self.wordcount)
+        # z = Input((latent_dim,), name="z", dtype="float32")
+        # e = Input((depth,), name="e", dtype="float32")
+        # ex = Input((depth,), name="ex", dtype="int32")
         # xreal = T.imatrix("xreal")
         # z = T.fmatrix("z")
         # e = T.fmatrix("e")
@@ -307,10 +314,10 @@ class WGanModel(object):
         gloss = T.mean(T.abs_(vtarget - vpred), axis=None)
         gopt = Adam(1e-5)
         gupdates = gopt.get_updates(self.generator.params, {}, gloss)
-        self.discriminator_train_function = theano.function([xreal, z, e, ex], [dloss], updates=dupdates)
-        self.generator_train_function = theano.function([z, e, ex], [gloss], updates=gupdates)
-        self.generator_sample_function = theano.function([z, e, ex], [xfake])
-        self.test_function = theano.function([xreal, z, e, ex], [dloss, gloss])
+        self.discriminator_train_function = theano.function([xreal, batch_n], [dloss], updates=dupdates)
+        self.generator_train_function = theano.function([batch_n], [gloss], updates=gupdates)
+        self.generator_sample_function = theano.function([batch_n], [xfake])
+        self.test_function = theano.function([xreal, batch_n], [dloss, gloss])
 
     def word_to_vector(self, word):
         assert len(word) <= self.depth
@@ -352,29 +359,30 @@ class WGanModel(object):
 
     def discriminator_train(self):
         xreal = self.real_sample(self.batch_size)
-        z = self.latent_sample(self.batch_size)
-        e = self.e_sample(self.batch_size)
-        ex = self.ex_sample(self.batch_size)
-        return self.discriminator_train_function(xreal, z, e, ex)[0]
+        # z = self.latent_sample(self.batch_size)
+        # e = self.e_sample(self.batch_size)
+        # ex = self.ex_sample(self.batch_size)
+        return self.discriminator_train_function(xreal, self.batch_size)[0]
 
     def generator_train(self):
-        z = self.latent_sample(self.batch_size)
-        e = self.e_sample(self.batch_size)
-        ex = self.ex_sample(self.batch_size)
-        return self.generator_train_function(z, e, ex)[0]
+        # z = self.latent_sample(self.batch_size)
+        # e = self.e_sample(self.batch_size)
+        # ex = self.ex_sample(self.batch_size)
+        # return self.generator_train_function(z, e, ex)[0]
+        return self.generator_train_function(self.batch_size)[0]
 
     def test(self):
         xreal = self.real_sample(self.batch_size)
-        z = self.latent_sample(self.batch_size)
-        e = self.e_sample(self.batch_size)
-        ex = self.ex_sample(self.batch_size)
-        return self.test_function(xreal, z, e, ex)
+        # z = self.latent_sample(self.batch_size)
+        # e = self.e_sample(self.batch_size)
+        # ex = self.ex_sample(self.batch_size)
+        return self.test_function(xreal, self.batch_size)
 
     def generate_samples(self, n):
-        z = self.latent_sample(n)
-        e = self.e_sample(n)
-        ex = self.ex_sample(n)
-        samples = self.generator_sample_function(z, e, ex)[0]
+        # z = self.latent_sample(n)
+        # e = self.e_sample(n)
+        # ex = self.ex_sample(n)
+        samples = self.generator_sample_function(n)[0]
         return self.matrix_to_words(samples)
 
     def write_samples(self, path):
@@ -410,7 +418,7 @@ def main():
     value_decay = 0.98
     batch_size = 64
     model = WGanModel(latent_dim, hidden_dim, exploration_probability, clip_value, value_decay, data, batch_size)
-    model.train(1000, 256, 32, "output/wgan-lstm/epoch-{:08d}.txt")
+    model.train(1000, 256, 5, "output/wgan-lstm/epoch-{:08d}.txt")
 
 
 if __name__ == "__main__":
