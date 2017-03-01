@@ -1,5 +1,5 @@
-#import os
-#os.environ["THEANO_FLAGS"] = "mode=FAST_COMPILE,device=cpu,floatX=float32"
+# import os
+# os.environ["THEANO_FLAGS"] = "mode=FAST_COMPILE,device=cpu,floatX=float32"
 import theano
 import theano.tensor as T
 from gym_symbolic_representation.datasets.processing import load_or_create
@@ -137,7 +137,7 @@ class WGanCEM(object):
         self.charcount = len(self.charset)
         self.latent_dim = latent_dim
         self.hidden_dim = hidden_dim
-        self.n_steps = 20
+        self.n_steps = 8
         self.word_vectors = np.vstack([self.word_to_vector(word).reshape((1, -1)) for word in self.words])
         self.word_vectors = np.expand_dims(self.word_vectors, 2)
         np.random.shuffle(self.word_vectors)
@@ -153,24 +153,23 @@ class WGanCEM(object):
         x_fakef._keras_shape = (None, self.n_steps, 1)
         y_fake = T.mean(self.discriminator.call(x_fakef), axis=None)
         loss_d = y_fake - y_real
-        self.opt_d = Adam(1e-3)
+        self.opt_d = Adam(1e-4)
         updates_d = self.opt_d.get_updates(self.discriminator.weights, self.discriminator.constraints, loss_d)
         self.batch_size = 64
-        self.batch_count = 16
+        self.batch_count = 8
         self.unroll_depth = 16
-        self.generator_count = 16
+        self.generator_count = 8
         self.train_d_function = K.function([x_real, z] + params_g, [loss_d], updates=updates_d)
         self.predict_d_function = K.function([x_real], [y_real])
 
         self.predict_g_function = K.function([z] + params_g, [x_fake])
         self.test_g_function = K.function([z] + params_g, [-y_fake])
 
-        self.backup_params = self.discriminator.weights+self.opt_d.weights
+        self.backup_params = self.discriminator.weights + self.opt_d.weights
         self.backup_values = None
 
     def discriminator_backup(self):
         self.backup_values = [p.get_value() for p in self.backup_params]
-
 
     def discriminator_load(self):
         for p, v in zip(self.backup_params, self.backup_values):
@@ -202,7 +201,7 @@ class WGanCEM(object):
 
     def train_d(self):
         losses = []
-        for _ in tqdm(range(self.batch_count), desc="Training Discriminator"):
+        for _ in range(self.batch_count):
             losses.append(self.train_d_batch(self.params_g_t))
         return np.average(losses, axis=None)
 
@@ -213,7 +212,6 @@ class WGanCEM(object):
         return self.train_d_function([x_real, z] + generator_params)[0]
 
     def test_g(self, params):
-        self.discriminator_backup()
         for _ in range(self.unroll_depth):
             self.train_d_batch(params)
         losses = []
@@ -229,10 +227,11 @@ class WGanCEM(object):
         return new_params
 
     def train_g(self):
+        self.discriminator_backup()
         best_params = self.params_g_t
         best_loss = self.test_g(self.params_g_t)
         original_loss = best_loss
-        for _ in tqdm(range(self.generator_count), desc="Training Generator"):
+        for _ in range(self.generator_count):
             newparams = self.parameter_sampling()
             newloss = self.test_g(newparams)
             if newloss < best_loss:
@@ -248,7 +247,7 @@ class WGanCEM(object):
             g_loss = []
             for _ in tqdm(range(nb_batch), desc="Epoch {}".format(epoch)):
                 for _ in range(nb_batch_d):
-                    d_loss.append(self.train_d())
+                    d_loss.append(self.train_d_batch(self.params_g_t))
                 g_loss.append(self.train_g())
             d_loss = np.mean(d_loss, axis=None)
             g_loss = np.mean(g_loss, axis=None)
@@ -274,7 +273,7 @@ def main():
     latent_dim = 100
     hidden_dim = 256
     model = WGanCEM(path, shakespeare.words, latent_dim, hidden_dim)
-    model.train(nb_epoch=1000, nb_batch=64, nb_batch_d=5, path=outputpath)
+    model.train(nb_epoch=1000, nb_batch=64, nb_batch_d=8, path=outputpath)
 
 
 if __name__ == "__main__":

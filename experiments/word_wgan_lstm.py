@@ -9,6 +9,7 @@ import numpy as np
 from keras.optimizers import Adam, RMSprop
 from gym_symbolic_representation.constraints import ClipConstraint
 from gym_symbolic_representation.datasets import shakespeare
+from gym_symbolic_representation.datasets import short
 from gym_symbolic_representation.datasets.processing import load_or_create
 from tqdm import tqdm
 from theano.tensor.shared_randomstreams import RandomStreams
@@ -31,6 +32,7 @@ def discriminator_function(x, h, y,
     # print("discriminator_function h: {}, {}".format(h, h.ndim))
     # print("discriminator_function y: {}, {}".format(y, y.ndim))
     hh = T.tanh(T.dot(h, W_h) + U_h[x, :] + b_h)
+    #hh = T.dot(h, W_h) + U_h[x, :] + b_h
     f = T.nnet.sigmoid(T.dot(hh, W_f) + b_f)
     i = T.nnet.sigmoid(T.dot(hh, W_i) + b_i)
     o = T.nnet.sigmoid(T.dot(hh, W_c) + b_c)
@@ -63,7 +65,7 @@ def policy_function(e, ex, h, x, z, exploration_probability,
     """
     # print("policy_function h: {}, {}".format(h, h.ndim))
     # print("policy_function x: {}, {}".format(x, x.ndim))
-    hh = T.dot(z, W_h) + T.dot(h, U_h) + V_h[x, :] + b_h
+    hh = T.tanh(T.dot(z, W_h) + T.dot(h, U_h) + V_h[x, :] + b_h)
     f = T.nnet.sigmoid(T.dot(hh, W_f) + b_f)
     i = T.nnet.sigmoid(T.dot(hh, W_i) + b_i)
     o = T.nnet.sigmoid(T.dot(hh, W_c) + b_c)
@@ -96,7 +98,8 @@ def value_function(x, a, h, v, z,
     v = last value (unused) [prior]
     z = latent vector (n, latent_dim) non-sequence
     """
-    hh = T.dot(z, W_h) + T.dot(h, U_h) + V_h[x, :] + b_h
+    hh = T.tanh(T.dot(z, W_h) + T.dot(h, U_h) + V_h[x, :] + b_h)
+    #hh = T.dot(z, W_h) + T.dot(h, U_h) + V_h[x, :] + b_h
     f = T.nnet.sigmoid(T.dot(hh, W_f) + b_f)
     i = T.nnet.sigmoid(T.dot(hh, W_i) + b_i)
     o = T.nnet.sigmoid(T.dot(hh, W_c) + b_c)
@@ -109,7 +112,8 @@ def value_function(x, a, h, v, z,
     return h_t, vt
 
 
-def reward_function(vt1, r, decay):
+# seq, prior result, non sequence
+def reward_function(r, vt1, decay):
     return r + vt1 * decay
 
 
@@ -393,7 +397,7 @@ class WGanModel(object):
         return self.matrix_to_words(samples)
 
     def write_samples(self, path):
-        words = self.generate_samples(100)
+        words = self.generate_samples(123)
         if not os.path.exists(os.path.dirname(path)):
             os.makedirs(os.path.dirname(path))
         with open(path, 'w') as f:
@@ -417,10 +421,11 @@ class WGanModel(object):
 
 
 def main():
-    path = "output/words-shakespeare-lower.pkl"
-    data = load_or_create(path, shakespeare.words, lower=True)
-    latent_dim = 100
-    hidden_dim = 512
+    #path = "output/words-shakespeare-lower.pkl"
+    path = "output/words-short-lower.pkl"
+    data = load_or_create(path, short.words, lower=True)
+    latent_dim = 32
+    hidden_dim = 234
     exploration_probability = 0.3
     clip_value = 1e-1
     value_decay = 0.98
