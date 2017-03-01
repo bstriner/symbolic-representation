@@ -31,8 +31,8 @@ def discriminator_function(x, h, y,
     """
     # print("discriminator_function h: {}, {}".format(h, h.ndim))
     # print("discriminator_function y: {}, {}".format(y, y.ndim))
-    hh = T.tanh(T.dot(h, W_h) + U_h[x, :] + b_h)
-    #hh = T.dot(h, W_h) + U_h[x, :] + b_h
+    #hh = T.tanh(T.dot(h, W_h) + U_h[x, :] + b_h)
+    hh = T.dot(h, W_h) + U_h[x, :] + b_h
     f = T.nnet.sigmoid(T.dot(hh, W_f) + b_f)
     i = T.nnet.sigmoid(T.dot(hh, W_i) + b_i)
     o = T.nnet.sigmoid(T.dot(hh, W_c) + b_c)
@@ -65,7 +65,8 @@ def policy_function(e, ex, h, x, z, exploration_probability,
     """
     # print("policy_function h: {}, {}".format(h, h.ndim))
     # print("policy_function x: {}, {}".format(x, x.ndim))
-    hh = T.tanh(T.dot(z, W_h) + T.dot(h, U_h) + V_h[x, :] + b_h)
+    #hh = T.tanh(T.dot(z, W_h) + T.dot(h, U_h) + V_h[x, :] + b_h)
+    hh = T.dot(z, W_h) + T.dot(h, U_h) + V_h[x, :] + b_h
     f = T.nnet.sigmoid(T.dot(hh, W_f) + b_f)
     i = T.nnet.sigmoid(T.dot(hh, W_i) + b_i)
     o = T.nnet.sigmoid(T.dot(hh, W_c) + b_c)
@@ -98,8 +99,8 @@ def value_function(x, a, h, v, z,
     v = last value (unused) [prior]
     z = latent vector (n, latent_dim) non-sequence
     """
-    hh = T.tanh(T.dot(z, W_h) + T.dot(h, U_h) + V_h[x, :] + b_h)
-    #hh = T.dot(z, W_h) + T.dot(h, U_h) + V_h[x, :] + b_h
+    #hh = T.tanh(T.dot(z, W_h) + T.dot(h, U_h) + V_h[x, :] + b_h)
+    hh = T.dot(z, W_h) + T.dot(h, U_h) + V_h[x, :] + b_h
     f = T.nnet.sigmoid(T.dot(hh, W_f) + b_f)
     i = T.nnet.sigmoid(T.dot(hh, W_i) + b_i)
     o = T.nnet.sigmoid(T.dot(hh, W_c) + b_c)
@@ -310,7 +311,7 @@ class WGanModel(object):
         _, yfake = self.discriminator.discriminator(xfake)
         _, yreal = self.discriminator.discriminator(xreal)
         dloss = T.mean(yfake, axis=None) - T.mean(yreal, axis=None)
-        dconstraints = {p: ClipConstraint(1e-1) for p in self.discriminator.clip_params}
+        dconstraints = {p: ClipConstraint(self.clip_value) for p in self.discriminator.clip_params}
         dopt = Adam(1e-4)
         dupdates = dopt.get_updates(self.discriminator.params, dconstraints, dloss)
 
@@ -397,7 +398,7 @@ class WGanModel(object):
         return self.matrix_to_words(samples)
 
     def write_samples(self, path):
-        words = self.generate_samples(123)
+        words = self.generate_samples(128)
         if not os.path.exists(os.path.dirname(path)):
             os.makedirs(os.path.dirname(path))
         with open(path, 'w') as f:
@@ -425,10 +426,10 @@ def main():
     path = "output/words-short-lower.pkl"
     data = load_or_create(path, short.words, lower=True)
     latent_dim = 32
-    hidden_dim = 234
+    hidden_dim = 512
     exploration_probability = 0.3
-    clip_value = 1e-1
-    value_decay = 0.98
+    clip_value = 1e-2
+    value_decay = 0.8
     batch_size = 64
     exploration_decay_rate = 0.998
     model = WGanModel(latent_dim, hidden_dim, exploration_probability, clip_value, value_decay, data, batch_size,
