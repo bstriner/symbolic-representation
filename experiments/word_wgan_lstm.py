@@ -428,7 +428,7 @@ def main():
     latent_dim = 32
     hidden_dim = 512
     exploration_probability = 0.3
-    clip_value = 1e-2
+    clip_value = 1e-1
     value_decay = 0.8
     batch_size = 64
     exploration_decay_rate = 0.998
